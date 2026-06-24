@@ -1,0 +1,50 @@
+# ---- Build output ----
+# Platform/configuration output folders (x64\Release\WindowsEReader.exe, etc.)
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww]in32/
+[Bb]uild/
+[Bb]in/
+[Oo]bj/
+ipch/
+
+# ---- Visual Studio per-user / IDE state ----
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+
+# ---- Local tooling state (per-user, not shared) ----
+.claude/settings.local.json
+
+# ---- MSVC intermediate / generated artifacts ----
+*.obj
+*.o
+*.exe
+*.dll
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.idb
+*.tlog
+*.log
+*.lastbuildstate
+*.ipdb
+*.iobj
+*.res
+*.aps
+*.pch
+
+# ---- Misc ----
+Thumbs.db
+desktop.ini
+
+# Keep the sample books under testfiles/ but ignore any throwaway captures.
+testfiles/*.png
+testfiles/_img/
