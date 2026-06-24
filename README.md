@@ -4,7 +4,17 @@ A native Windows application for reading **EPUB** e-books and **CBZ** comic
 archives, written in C against the **Win32 API** only and built with the
 **MSVC** compiler. No third-party libraries are used: ZIP/DEFLATE decoding is
 implemented from scratch, image decoding uses the Windows Imaging Component
-(WIC), and text/image presentation uses GDI.
+(WIC), and text/image presentation uses GDI. The whole thing is a single
+~53 KB executable with no installer and no runtime to ship.
+
+## Download
+
+Prebuilt binaries are on the
+[Releases](https://github.com/brianhasquestions/Windows-E-Reader/releases)
+page — download `WindowsEReader.exe`, double-click, and open a book. There is
+nothing to install and nothing to configure; the executable depends only on
+built-in Windows system libraries. Prefer to build it yourself? See
+[Building](#building).
 
 ## Features
 
@@ -16,12 +26,21 @@ implemented from scratch, image decoding uses the Windows Imaging Component
 - **Page-based navigation** with both mouse and keyboard.
 - **Fit modes** for comics: whole page, fit width, fit height, original size.
 - **Zoom and pan** for comics; **adjustable font size** for e-books.
-- **Reading themes**: Light, Sep, Dark (cycle through them).
+- **Reading themes**: Light, Sepia, and Dark — applied to the page *and* the
+  window chrome (menu bar and title bar), cycled with `T`.
 - **Fullscreen** reading mode.
 - **Chapter navigation** for EPUB.
 - **Menu bar** (File / View / Go / Help) and a welcome screen, plus
   **drag-and-drop** and command-line file opening.
 - Flicker-free, double-buffered rendering.
+
+## Requirements
+
+- 64-bit **Windows 10** or **Windows 11**. (A 32-bit / Win32 build can also be
+  produced from source.)
+- **No runtime to install** — no Visual C++ redistributable, no .NET. The dark
+  title bar uses a Windows 10 (2004+) / Windows 11 feature and is harmlessly
+  skipped on older systems.
 
 ## Opening a file
 
@@ -48,8 +67,25 @@ Any of these work:
 | Previous / next chapter (EPUB) | `[` / `]` |
 | Open file | `Ctrl+O`, or **File ▸ Open** |
 
-The same commands are available from the menu bar (**Go**, **View**), and a
-list is shown under **Help ▸ Controls**.
+`Open`, `Cycle theme`, and `Fullscreen` work even on the welcome screen before a
+book is loaded. The same commands are available from the menu bar (**Go**,
+**View**), and a full list is shown under **Help ▸ Controls**.
+
+## Building
+
+Open `WindowsEReader.sln` in Visual Studio and build, or from a command line
+(Developer prompt, or with MSBuild on the `PATH`):
+
+```
+msbuild WindowsEReader.sln /p:Configuration=Release /p:Platform=x64
+```
+
+The output is `build\bin\x64\Release\WindowsEReader.exe` — every configuration
+and platform builds under a single `build\` tree (`build\bin\…` for binaries,
+`build\obj\…` for intermediates), so nothing is scattered at the project root.
+The Release configuration is optimized for size (`/O1 /Os`, function-level
+linking, COMDAT folding, whole-program optimization). Swap `/p:Platform=Win32`
+for a 32-bit build.
 
 ## Project layout
 
@@ -60,47 +96,37 @@ src/
   include/                         headers, grouped by concern
     ereader.h                      shared macros and Win32 surface
     platform.h                     no-CRT memory/string layer
-    application.h  window.h         core + window plumbing
-    archive.h      inflate.h        ZIP reader + DEFLATE decoder
-    document.h     renderer.h       document model + presentation
+    application.h  window.h        core + window plumbing
+    archive.h      inflate.h       ZIP reader + DEFLATE decoder
+    document.h     renderer.h      document model + presentation
   source/                          implementations, mirrored layout
     main.c                         custom entry point only — routes to core
     platform.c                     no-CRT support (HeapAlloc, mem/str helpers)
     application.c                  application core / message loop / commands
-    window.c                       window class + window procedure
-    archive.c      inflate.c        ZIP (file-mapped) + DEFLATE
+    window.c                       window class + window procedure (+ themed menu)
+    archive.c      inflate.c       ZIP (file-mapped) + DEFLATE
     document.c                     EPUB/CBZ parsing into the document model
     renderer.c                     WIC image + GDI text rendering
 testfiles/                         sample.epub and sample.cbz for trying it out
 ```
-
-## Building
-
-Open `WindowsEReader.sln` in Visual Studio and build, or from a command line:
-
-```
-msbuild WindowsEReader.sln /p:Configuration=Release /p:Platform=x64
-```
-
-The output is `x64\Release\WindowsEReader.exe`. The Release configuration is
-optimized for size (`/O1 /Os`, function-level linking, COMDAT folding, whole
-program optimization).
 
 ## Architecture notes & conventions
 
 - **No C runtime.** The application links with `/NODEFAULTLIB` and a custom
   entry point (`EReaderEntryPoint` in `main.c`, which calls `App_Run` then
   `ExitProcess`). The Release binary depends only on Windows system DLLs
-  (kernel32, user32, gdi32, shell32, shlwapi, ole32, comdlg32) — no
-  `vcruntime`/`ucrtbase`/`msvcrt` — and is ~44 KB.
+  (kernel32, user32, gdi32, shell32, shlwapi, ole32, comdlg32, dwmapi) — no
+  `vcruntime`/`ucrtbase`/`msvcrt` — and is about 53 KB. (WIC is created through
+  COM at runtime, so it is not a load-time import.)
 - Everything the CRT would normally provide lives in the `platform` module
   (`platform.h`/`platform.c`): heap memory on `HeapAlloc`/`HeapReAlloc`/
-  `HeapFree`, bounded by-hand string/length/copy helpers, the freestanding
-  `memset`/`memcpy`/`memmove`/`memcmp` the compiler still emits, and the
-  `_fltused` floating-point marker.
+  `HeapFree` (zeroed on allocation and scrubbed on free with `SecureZeroMemory`),
+  bounded by-hand string/length/copy helpers, bulk copies routed through the OS
+  `RtlMoveMemory` export, and the `_fltused` floating-point marker.
 - String comparison uses the Win32 `CompareStringOrdinal` (the recommended
-  secure, locale-independent replacement for `strcmp`/`_stricmp`); formatting
-  uses `wsprintfW`; sorting is an in-house Shell sort (no `qsort`).
+  secure, locale-independent replacement for `strcmp`/`_stricmp`); bounded
+  string scans use shlwapi (`StrChrNW` / `StrRChrW`); formatting uses
+  `wsprintfW`; sorting is an in-house Shell sort (no `qsort`).
 - A single `APP_CONTEXT` is threaded through the code so that nearly every
   function stays within a three-parameter budget; where more state is needed a
   dedicated struct is passed instead.
